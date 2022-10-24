@@ -1,5 +1,5 @@
 const Main = imports.ui.main
-const { GLib } = imports.gi
+const { Gio } = imports.gi
 
 const ExtensionUtils = imports.misc.extensionUtils
 const Me = ExtensionUtils.getCurrentExtension()
@@ -34,27 +34,42 @@ class Extension {
   }
 
   startService() {
-    this._interval = setInterval(() => this._update(), 1000)
+    this._timeout = setTimeout(() => this._update(), 1000)
   }
 
   _update() {
-    const [, stdout, , status] = GLib.spawn_command_line_sync('warp-cli status')
+    const proc = Gio.Subprocess.new(
+      ['warp-cli', 'status'],
+      Gio.SubprocessFlags.STDOUT_PIPE
+    )
 
-    if (status === 0) {
-      const s = statusPattern.exec(stdout)?.[1]
+    proc.communicate_utf8_async(null, null, (proc, res) => {
+      const [, stdout] = proc.communicate_utf8_finish(res)
 
-      if (!s) return this._indicator.updateStatus(null)
+      if (proc.get_successful()) {
+        const s = statusPattern.exec(stdout)?.[1]
+        if (!s) this._indicator.updateStatus(null)
+        else this._indicator.updateStatus(s)
+      } else {
+        this._indicator.updateStatus('Disconnected')
+      }
 
-      this._indicator.updateStatus(s)
-    } else {
-      this._indicator.updateStatus('Disconnected')
-    }
+      setTimeout(() => this._update(), 1000)
+    })
+
+    // if (status === 0) {
+    //   const s = statusPattern.exec(out)?.[1]
+    //   if (!s) return this._indicator.updateStatus(null)
+    //   this._indicator.updateStatus(s)
+    // } else {
+    //   this._indicator.updateStatus('Disconnected')
+    // }
   }
 
   stopService() {
-    if (!this._interval) return
+    if (!this._timeout) return
 
-    clearInterval(this._interval)
+    clearInterval(this._timeout)
   }
 }
 

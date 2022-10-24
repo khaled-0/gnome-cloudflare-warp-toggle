@@ -1,7 +1,7 @@
 const { GObject, Gio } = imports.gi
 
 const { SystemIndicator, QuickToggle } = imports.ui.quickSettings
-const { GLib } = imports.gi
+const { spawnCommandLine } = imports.misc.util
 
 const ExtensionUtils = imports.misc.extensionUtils
 const Me = ExtensionUtils.getCurrentExtension()
@@ -21,12 +21,10 @@ const WarpToggle = GObject.registerClass(
 
     _toggle() {
       if (this.checked) {
-        GLib.spawn_command_line_sync('warp-cli disconnect')
+        spawnCommandLine('warp-cli disconnect')
       } else {
-        GLib.spawn_command_line_sync('warp-cli connect')
+        spawnCommandLine('warp-cli connect')
       }
-
-      this.set({ checked: !this.checked })
     }
   }
 )

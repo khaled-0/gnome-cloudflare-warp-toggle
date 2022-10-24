@@ -2,7 +2,7 @@
   "name": "Cloudflare Warp Quick Settings",
   "description": "Toggle cloudflare warp in quick settings",
   "shell-version": ["43"],
-  "url": "https://github.com/pikokr/cloudflare-warp-gnome-quicksettings",
+  "url": "https://github.com/pikokr/cloudflare-warp-quicksettings",
   "uuid": "warpswitcher@pikokr.dev",
   "version": 1.0
 }

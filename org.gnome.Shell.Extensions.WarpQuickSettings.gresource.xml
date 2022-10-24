@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="/org/gnome/Shell/Extensions/WarpQuickSettings">
+    <file compressed="true" preprocess="xml-stripblanks">icons/org.gnome.Shell.Extensions.WarpQuickSettings.CloudflareLogo.svg</file>
+  </gresource>
+</gresources>

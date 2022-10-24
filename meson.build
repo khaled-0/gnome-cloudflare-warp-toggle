@@ -9,8 +9,6 @@ extuuid = 'warpswitcher@pikokr.dev'
 
 extdatadir = join_paths(fs.expanduser('~/.local/share/gnome-shell'), 'extensions', extuuid)
 
-extconfig = configuration_data()
-
 # gnome.compile_resources(
 #   app_id,
 #   app_id + '.gresource.xml',

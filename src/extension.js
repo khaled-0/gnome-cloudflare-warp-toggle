@@ -7,8 +7,10 @@ const Me = ExtensionUtils.getCurrentExtension()
 const QuickSettings = Main.panel.statusArea.quickSettings
 
 const { Indicator } = Me.imports.indicator
+const { setError, clearError } = Me.imports.util
 
-const statusPattern = /Status update: (Connected|Connecting|Disconnected)/
+const statusPattern =
+  /Status update: (Connected|Connecting|Disconnected|Registration missing)/
 
 class Extension {
   constructor() {
@@ -47,11 +49,18 @@ class Extension {
       const [, stdout] = proc.communicate_utf8_finish(res)
 
       if (proc.get_successful()) {
+        clearError('warp-not-running')
+
         const s = statusPattern.exec(stdout)?.[1]
         if (!s) this._indicator.updateStatus(null)
         else this._indicator.updateStatus(s)
       } else {
-        this._indicator.updateStatus('Disconnected')
+        this._indicator.updateStatus(null)
+
+        setError(
+          'warp-not-running',
+          `Unable to check if WARP is running. Did you start the service?\nIf not, try running "sudo systemctl start warp-svc.service"`
+        )
       }
 
       setTimeout(() => this._update(), 1000)

@@ -7,6 +7,7 @@ const ExtensionUtils = imports.misc.extensionUtils
 const Me = ExtensionUtils.getCurrentExtension()
 
 const icon = Gio.icon_new_for_string(Me.path + '/icons/cloudflare.svg')
+const { setError, clearError } = Me.imports.util
 
 const WarpToggle = GObject.registerClass(
   class WarpToggle extends QuickToggle {
@@ -55,6 +56,15 @@ var Indicator = GObject.registerClass(
     }
 
     updateStatus(status) {
+      if (status === 'Registration missing') {
+        setError(
+          'registration-missing',
+          'Registration is missing.\nTry running "warp-cli register"'
+        )
+      } else {
+        clearError('registration-missing')
+      }
+
       const enabled = status === 'Connected'
 
       this._indicator.visible = enabled

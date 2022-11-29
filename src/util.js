@@ -1,4 +1,4 @@
-const { Gio } = imports.gi
+const Main = imports.ui.main
 
 const errors = new Map()
 
@@ -13,10 +13,7 @@ function setError(id, message) {
 
   errors.set(id, true)
 
-  Gio.Subprocess.new(
-    ['notify-send', 'Cloudflare WARP is not working', message],
-    Gio.SubprocessFlags.NONE
-  )
+  Main.notify('Cloudflare WARP is not working', message)
 }
 
 /**

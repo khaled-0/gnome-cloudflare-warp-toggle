@@ -1,6 +1,6 @@
-const Main = imports.ui.main
+const Main = imports.ui.main;
 
-const errors = new Map()
+const errors = new Map();
 
 /**
  * Send an error alert
@@ -9,11 +9,11 @@ const errors = new Map()
  */
 // eslint-disable-next-line no-unused-vars
 function setError(id, message) {
-  if (errors.has(id)) return
+  if (errors.has(id)) return;
 
-  errors.set(id, true)
+  errors.set(id, true);
 
-  Main.notify('Cloudflare WARP is not working', message)
+  Main.notify("Cloudflare WARP is not working", message);
 }
 
 /**
@@ -22,5 +22,5 @@ function setError(id, message) {
  */
 // eslint-disable-next-line no-unused-vars
 function clearError(id) {
-  errors.delete(id)
+  errors.delete(id);
 }

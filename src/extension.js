@@ -72,6 +72,7 @@ class Extension {
   }
 }
 
+// eslint-disable-next-line no-unused-vars
 function init() {
   return new Extension();
 }

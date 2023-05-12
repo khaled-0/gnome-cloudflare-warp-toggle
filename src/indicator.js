@@ -9,7 +9,6 @@ const ExtensionUtils = imports.misc.extensionUtils;
 const Me = ExtensionUtils.getCurrentExtension();
 
 const icon = Gio.icon_new_for_string(Me.path + "/icons/cloudflare.svg");
-const { setError, clearError } = Me.imports.util;
 
 const WarpToggle = GObject.registerClass(
   class WarpToggle extends QuickToggle {
@@ -31,6 +30,7 @@ const WarpToggle = GObject.registerClass(
   }
 );
 
+// eslint-disable-next-line no-unused-vars
 var Indicator = GObject.registerClass(
   class Indicator extends SystemIndicator {
     _init() {

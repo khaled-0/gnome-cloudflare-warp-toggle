@@ -1,7 +1,7 @@
 {
-  "name": "Cloudflare Warp Quick Settings",
   "description": "Toggle cloudflare warp in quick settings\n\nThe logo is from cloudflare(https://www.cloudflare.com). This extension is not affiliated, funded, or in any way associated with Cloudflare.",
-  "shell-version": ["43"],
+  "name": "Cloudflare Warp Quick Settings",
+  "shell-version": ["43", "44"],
   "url": "https://github.com/pikokr/cloudflare-warp-quicksettings",
   "uuid": "warpswitcher@pikokr.dev",
   "version": 4

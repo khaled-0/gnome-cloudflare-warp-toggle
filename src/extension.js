@@ -1,88 +1,77 @@
-const Main = imports.ui.main
-const { Gio } = imports.gi
+const { Gio } = imports.gi;
 
-const ExtensionUtils = imports.misc.extensionUtils
-const Me = ExtensionUtils.getCurrentExtension()
+const ExtensionUtils = imports.misc.extensionUtils;
+const Me = ExtensionUtils.getCurrentExtension();
 
-const QuickSettings = Main.panel.statusArea.quickSettings
-
-const { Indicator } = Me.imports.indicator
-const { setError, clearError } = Me.imports.util
+const { Indicator } = Me.imports.indicator;
+const { setError, clearError } = Me.imports.util;
 
 const statusPattern =
-  /Status update: (Connected|Connecting|Disconnected|Registration missing)/
+  /Status update: (Connected|Connecting|Disconnected|Registration missing)/;
 
 class Extension {
   constructor() {
-    this._indicator = null
+    this._indicator = null;
   }
 
   enable() {
-    this._indicator = new Indicator()
-
-    QuickSettings._indicators.insert_child_at_index(this._indicator, 0)
-    QuickSettings._addItems(this._indicator.quickSettingsItems)
-
-    this.startService()
+    this._indicator = new Indicator();
+    this.startService();
   }
 
   disable() {
     if (this._indicator) {
-      this._indicator.destroy()
-      this._indicator = null
+      this._indicator.destroy();
+      this._indicator = null;
     }
 
-    this.stopService()
-  }
-
-  startService() {
-    this._timeout = setTimeout(() => this._update(), 1000)
+    this.stopService();
   }
 
   _update() {
     const proc = Gio.Subprocess.new(
-      ['warp-cli', 'status'],
+      ["warp-cli", "status"],
       Gio.SubprocessFlags.STDOUT_PIPE
-    )
+    );
 
     proc.communicate_utf8_async(null, null, (proc, res) => {
-      const [, stdout] = proc.communicate_utf8_finish(res)
+      const [, stdout] = proc.communicate_utf8_finish(res);
 
       if (proc.get_successful()) {
-        clearError('warp-not-running')
+        clearError("warp-not-running");
 
-        const s = statusPattern.exec(stdout)?.[1]
-        if (!s) this._indicator.updateStatus(null)
-        else this._indicator.updateStatus(s)
+        const status = statusPattern.exec(stdout)?.[1];
+        this._indicator.updateStatus(status);
+
+        if (status === "Registration missing") {
+          setError(
+            "registration-missing",
+            'Registration is missing.\nTry running "warp-cli register"'
+          );
+        } else {
+          clearError("registration-missing");
+        }
       } else {
-        this._indicator.updateStatus(null)
+        this._indicator.updateStatus(null);
 
         setError(
-          'warp-not-running',
+          "warp-not-running",
           `Unable to check if WARP is running. Did you start the service?\nIf not, try running "sudo systemctl start warp-svc.service"`
-        )
+        );
       }
 
-      setTimeout(() => this._update(), 1000)
-    })
-
-    // if (status === 0) {
-    //   const s = statusPattern.exec(out)?.[1]
-    //   if (!s) return this._indicator.updateStatus(null)
-    //   this._indicator.updateStatus(s)
-    // } else {
-    //   this._indicator.updateStatus('Disconnected')
-    // }
+      setTimeout(() => this._update(), 1000);
+    });
   }
 
+  startService() {
+    this._timeout = setTimeout(() => this._update(), 1000);
+  }
   stopService() {
-    if (!this._timeout) return
-
-    clearInterval(this._timeout)
+    if (this._timeout) clearInterval(this._timeout);
   }
 }
 
-// eslint-disable-next-line no-unused-vars
 function init() {
-  return new Extension()
+  return new Extension();
 }

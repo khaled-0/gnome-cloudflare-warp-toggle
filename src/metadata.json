@@ -1,8 +1,8 @@
 {
   "description": "Toggle cloudflare warp in quick settings\n\nThe logo is from cloudflare(https://www.cloudflare.com). This extension is not affiliated, funded, or in any way associated with Cloudflare.",
-  "name": "Cloudflare Warp Quick Settings",
+  "name": "Cloudflare Warp Toggle",
   "shell-version": ["43", "44"],
   "url": "https://github.com/Khaled-Does-Stuff/gnome-cloudflare-warp-quicksettings",
-  "uuid": "cloudflare-warp-quicksettings@khaled.is-a.dev",
+  "uuid": "cloudflare-warp-toggle@khaled.is-a.dev",
   "version": 1
 }

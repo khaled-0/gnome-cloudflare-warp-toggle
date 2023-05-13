@@ -1,7 +1,10 @@
 #!/bin/bash
 
-rm -rf '~/.local/share/gnome-shell/extensions/warpswitcher@pikokr.dev'
+# Delete existing copy of the extension
+rm -rf ~/.local/share/gnome-shell/extensions/cloudflare-warp-toggle@khaled.is-a.dev
+mkdir -p ~/.local/share/gnome-shell/extensions/cloudflare-warp-toggle@khaled.is-a.dev
 
-cp -r 'warpswitcher@pikokr.dev' ~/.local/share/gnome-shell/extensions
+#Copy extension source to the directory
+cp -a "src/." ~/.local/share/gnome-shell/extensions/cloudflare-warp-toggle@khaled.is-a.dev
 
-echo Please restart gnome shell
+echo "Please restart gnome shell"

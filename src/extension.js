@@ -16,7 +16,7 @@ class Extension {
 
   enable() {
     this._indicator = new Indicator();
-    this.startService();
+    this._timeout = setTimeout(() => this._update(), 1000);
   }
 
   disable() {
@@ -25,7 +25,10 @@ class Extension {
       this._indicator = null;
     }
 
-    this.stopService();
+    if (this._timeout) {
+      clearInterval(this._timeout);
+      this._timeout = null;
+    }
   }
 
   _update() {
@@ -62,13 +65,6 @@ class Extension {
 
       setTimeout(() => this._update(), 1000);
     });
-  }
-
-  startService() {
-    this._timeout = setTimeout(() => this._update(), 1000);
-  }
-  stopService() {
-    if (this._timeout) clearInterval(this._timeout);
   }
 }
 

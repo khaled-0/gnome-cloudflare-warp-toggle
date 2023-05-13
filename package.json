@@ -1,12 +1,17 @@
 {
-  "name": "cloudflare-warp-gnome-quicksettings",
+  "name": "cloudflare-warp-toggle",
   "version": "1.0.0",
   "main": "index.js",
   "license": "MIT",
+  "scripts": {
+    "build": "zip-build src",
+    "lint": "eslint ."
+  },
   "devDependencies": {
     "eslint": "^8.26.0",
     "eslint-config-prettier": "^8.5.0",
     "eslint-plugin-prettier": "^4.2.1",
-    "prettier": "^2.7.1"
+    "prettier": "^2.7.1",
+    "zip-build": "^1.8.0"
   }
 }

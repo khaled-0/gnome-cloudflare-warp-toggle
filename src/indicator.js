@@ -16,7 +16,9 @@ const WarpToggle = GObject.registerClass(
       });
 
       this.label = "Cloudflare WARP";
-      this.gicon = Gio.icon_new_for_string(Me.path + "/icons/cloudflare.svg");
+      this.gicon = Gio.icon_new_for_string(
+        Me.path + "/icons/cloudflare-symbolic.svg"
+      );
 
       this.connect("clicked", () => {
         if (this.checked) {
@@ -37,15 +39,23 @@ var Indicator = GObject.registerClass(
       this._indicator = this._addIndicator();
       this._indicator.visible = false;
       this._indicator.gicon = Gio.icon_new_for_string(
-        Me.path + "/icons/cloudflare.svg"
+        Me.path + "/icons/cloudflare-symbolic.svg"
       );
 
       this._toggle = new WarpToggle();
       this.quickSettingsItems.push(this._toggle);
 
       // Add the indicator to the panel and the toggle to the menu
-      QuickSettingsMenu._indicators.insert_child_at_index(this, 0);
       QuickSettingsMenu._addItems(this.quickSettingsItems);
+      QuickSettingsMenu._indicators.insert_child_at_index(this, 0);
+
+      // Ensure the tile(s) are above the background apps menu
+      for (const item of this.quickSettingsItems) {
+        QuickSettingsMenu.menu._grid.set_child_below_sibling(
+          item,
+          QuickSettingsMenu._backgroundApps.quickSettingsItems[0]
+        );
+      }
     }
 
     destroy() {

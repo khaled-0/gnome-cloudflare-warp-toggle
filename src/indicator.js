@@ -8,16 +8,15 @@ const { spawnCommandLine } = imports.misc.util;
 const ExtensionUtils = imports.misc.extensionUtils;
 const Me = ExtensionUtils.getCurrentExtension();
 
-const icon = Gio.icon_new_for_string(Me.path + "/icons/cloudflare.svg");
-
 const WarpToggle = GObject.registerClass(
   class WarpToggle extends QuickToggle {
     _init() {
       super._init({
         title: "Cloudflare WARP",
-        gicon: icon,
       });
+
       this.label = "Cloudflare WARP";
+      this.gicon = Gio.icon_new_for_string(Me.path + "/icons/cloudflare.svg");
 
       this.connect("clicked", () => {
         if (this.checked) {
@@ -36,8 +35,10 @@ var Indicator = GObject.registerClass(
     _init() {
       super._init();
       this._indicator = this._addIndicator();
-      this._indicator.gicon = icon;
       this._indicator.visible = false;
+      this._indicator.gicon = Gio.icon_new_for_string(
+        Me.path + "/icons/cloudflare.svg"
+      );
 
       this._toggle = new WarpToggle();
       this.quickSettingsItems.push(this._toggle);

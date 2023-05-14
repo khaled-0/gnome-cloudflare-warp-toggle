@@ -1,13 +1,16 @@
 const { Gio } = imports.gi;
+const GLib = imports.gi.GLib;
+const Main = imports.ui.main;
 
 const ExtensionUtils = imports.misc.extensionUtils;
 const Me = ExtensionUtils.getCurrentExtension();
 
 const { Indicator } = Me.imports.indicator;
-const { setError, clearError } = Me.imports.util;
 
 const statusPattern =
   /Status update: (Connected|Connecting|Disconnected|Registration missing)/;
+
+let errors = null;
 
 class Extension {
   constructor() {
@@ -15,8 +18,9 @@ class Extension {
   }
 
   enable() {
+    errors = new Map();
     this._indicator = new Indicator();
-    this._timeout = setTimeout(() => this._update(), 1000);
+    this._timeout = setInterval(() => this._update(), 1000);
   }
 
   disable() {
@@ -28,6 +32,11 @@ class Extension {
     if (this._timeout) {
       clearInterval(this._timeout);
       this._timeout = null;
+    }
+
+    if (errors) {
+      errors.clear();
+      errors = null;
     }
   }
 
@@ -41,7 +50,7 @@ class Extension {
       const [, stdout] = proc.communicate_utf8_finish(res);
 
       if (proc.get_successful()) {
-        clearError("warp-not-running");
+        errors.delete("warp-not-running");
 
         const status = statusPattern.exec(stdout)?.[1];
         this._indicator.updateStatus(status);
@@ -52,7 +61,7 @@ class Extension {
             'Registration is missing.\nTry running "warp-cli register"'
           );
         } else {
-          clearError("registration-missing");
+          errors.delete("registration-missing");
         }
       } else {
         this._indicator.updateStatus(null);
@@ -62,10 +71,20 @@ class Extension {
           `Unable to check if WARP is running. Did you start the service?\nIf not, try running "sudo systemctl start warp-svc.service"`
         );
       }
-
-      setTimeout(() => this._update(), 1000);
     });
   }
+}
+
+/**
+ * Send an error alert
+ * @param {string} id The identifier for message
+ * @param {string} message The message for notification
+ */
+function setError(id, message) {
+  if (errors == null) errors = new Map();
+  if (errors.has(id)) return;
+  errors.set(id, true);
+  Main.notify("Cloudflare WARP is not working", message);
 }
 
 // eslint-disable-next-line no-unused-vars

@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Compile schemas
+glib-compile-schemas "src/schemas/"
+
 # Delete existing copy of the extension
 rm -rf ~/.local/share/gnome-shell/extensions/cloudflare-warp-toggle@khaled.is-a.dev
 mkdir -p ~/.local/share/gnome-shell/extensions/cloudflare-warp-toggle@khaled.is-a.dev

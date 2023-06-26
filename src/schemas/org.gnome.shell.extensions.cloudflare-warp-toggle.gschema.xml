@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.cloudflare-warp-toggle.gschema" path="/org/gnome/shell/extensions/cloudflare-warp-toggle/">
+    <key name="status-check" type="b">
+      <default>true</default>
+      <summary>Check warp connection status in background</summary>
+      <description>Updates the indicator status by running warp-cli status periodicaly</description>
+    </key>
+    
+    <key name="status-check-freq" type="u">
+      <default>10</default>
+      <summary>Status check frequency</summary>
+      <description>Time in seconds between automatic background status checks. Too frequent checks may impact performance</description>
+    </key>
+  </schema>
+</schemalist>

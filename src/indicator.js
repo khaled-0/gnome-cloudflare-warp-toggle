@@ -8,44 +8,53 @@ const { spawnCommandLine } = imports.misc.util;
 const ExtensionUtils = imports.misc.extensionUtils;
 const Me = ExtensionUtils.getCurrentExtension();
 
-const WarpToggle = GObject.registerClass(
-  class WarpToggle extends QuickToggle {
+const statusPattern =
+  /(Connected|Connecting|Disconnected|Registration Missing)/;
+
+var WARPToggle = GObject.registerClass(
+  class WARPToggle extends QuickToggle {
     _init() {
       super._init({
-        title: "Cloudflare WARP",
+        title: "WARP",
       });
 
-      this.label = "Cloudflare WARP";
+      this.label = "WARP";
       this.gicon = Gio.icon_new_for_string(
         Me.path + "/icons/cloudflare-symbolic.svg"
       );
-
-      this.connect("clicked", () => {
-        if (this.checked) {
-          spawnCommandLine("warp-cli disconnect");
-        } else {
-          spawnCommandLine("warp-cli connect");
-        }
-      });
     }
   }
 );
 
 // eslint-disable-next-line no-unused-vars
-var Indicator = GObject.registerClass(
-  class Indicator extends SystemIndicator {
+var WARPIndicator = GObject.registerClass(
+  class WARPIndicator extends SystemIndicator {
     _init() {
       super._init();
+      this.settings = ExtensionUtils.getSettings();
       this._indicator = this._addIndicator();
       this._indicator.visible = false;
       this._indicator.gicon = Gio.icon_new_for_string(
         Me.path + "/icons/cloudflare-symbolic.svg"
       );
 
-      this._toggle = new WarpToggle();
+      this._toggle = new WARPToggle();
+      this._toggle.connect("clicked", () => {
+        this.checkStatus();
+        spawnCommandLine(
+          `warp-cli ${!this._toggle.checked ? "connect" : "disconnect"}`
+        );
+        this.checkStatus();
+
+        if (!this.settings.get_boolean("status-check"))
+          this._manualStatusCheck = setTimeout(
+            () => this.checkStatus(),
+            this.settings.get_uint("status-check-freq") + 1000
+          );
+      });
+
       this.quickSettingsItems.push(this._toggle);
 
-      // Add the indicator to the panel and the toggle to the menu
       QuickSettingsMenu._addItems(this.quickSettingsItems);
       QuickSettingsMenu._indicators.insert_child_at_index(this, 0);
 
@@ -59,16 +68,30 @@ var Indicator = GObject.registerClass(
     }
 
     destroy() {
+      this.settings = null;
+      if (this._manualStatusCheck) clearTimeout(this._manualStatusCheck);
+      this._manualStatusCheck = null;
       this._indicator.destroy();
       for (const item of this.quickSettingsItems) item.destroy();
       super.destroy();
     }
 
-    updateStatus(status) {
-      const enabled = status === "Connected" || status === "Connecting";
+    updateStatus(isActive, optionalStatus) {
+      this._indicator.visible = isActive;
+      this._toggle.set({ checked: isActive, subtitle: optionalStatus });
+    }
 
-      this._indicator.visible = enabled;
-      this._toggle.set({ checked: enabled });
+    checkStatus() {
+      let proc = Gio.Subprocess.new(
+        ["warp-cli", "status"],
+        Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
+      );
+
+      let [ok, stdout] = proc.communicate_utf8(null, null);
+      if (ok) {
+        const status = statusPattern.exec(stdout)?.[1];
+        this.updateStatus(status == "Connected", status);
+      }
     }
   }
 );

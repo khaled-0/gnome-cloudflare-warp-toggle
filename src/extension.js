@@ -12,29 +12,19 @@ class Extension {
     this._indicator = new WARPIndicator();
     this.settings = ExtensionUtils.getSettings();
 
-    if (
-      this.settings.get_uint("status-check-freq") > 0 &&
-      this.settings.get_boolean("status-check")
-    ) {
-      this._timeout = setInterval(
-        () => this._indicator.checkStatus(),
-        this.settings.get_uint("status-check-freq") * 1000
-      );
+    if (this._settings.get_boolean("status-check")) {
+      this.startStatusCheckLoop();
+    } else {
+      this._indicator.checkStatus();
     }
 
-    this.settings.connect("changed", (settings) => {
-      if (this._timeout) clearInterval(this._timeout);
-      if (
-        settings.get_uint("status-check-freq") > 0 &&
-        settings.get_boolean("status-check")
-      )
-        this._timeout = setInterval(
-          () => this._indicator.checkStatus(),
-          settings.get_uint("status-check-freq") * 1000
-        );
+    this._settings.connect("changed", (settings) => {
+      if (settings.get_boolean("status-check")) {
+        this.startStatusCheckLoop();
+      } else {
+        if (this._timeout) clearInterval(this._timeout);
+      }
     });
-
-    this._indicator.checkStatus();
   }
 
   disable() {
@@ -49,6 +39,16 @@ class Extension {
     }
 
     this.settings = null;
+  }
+
+  startStatusCheckLoop() {
+    if (this._timeout) clearInterval(this._timeout);
+    if (this._settings.get_uint("status-check-freq") <= 0) return;
+
+    this._timeout = setInterval(
+      () => this._indicator.checkStatus(),
+      this._settings.get_uint("status-check-freq") * 1000
+    );
   }
 }
 

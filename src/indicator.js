@@ -82,15 +82,20 @@ var WARPIndicator = GObject.registerClass(
     }
 
     checkStatus() {
-      let proc = Gio.Subprocess.new(
-        ["warp-cli", "status"],
-        Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
-      );
+      try {
+        let proc = Gio.Subprocess.new(
+          ["warp-cli", "status"],
+          Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
+        );
 
-      let [ok, stdout] = proc.communicate_utf8(null, null);
-      if (ok) {
-        const status = statusPattern.exec(stdout)?.[1];
-        this.updateStatus(status == "Connected", status);
+        let [ok, stdout] = proc.communicate_utf8(null, null);
+        if (ok) {
+          const status = statusPattern.exec(stdout)?.[1];
+          this.updateStatus(status == "Connected", status);
+        }
+      } catch (err) {
+        this.updateStatus(false, "Error");
+        logError(err);
       }
     }
   }

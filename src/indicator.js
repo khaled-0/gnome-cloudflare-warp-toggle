@@ -39,18 +39,15 @@ var WARPIndicator = GObject.registerClass(
       );
 
       this._toggle = new WARPToggle();
-      this._toggle.connect("clicked", () => {
-        this.checkStatus();
+      this._toggle.connect("clicked", async () => {
+        if ((await this.checkStatus()) == "Connecting") return;
+
         spawnCommandLine(
           `warp-cli ${!this._toggle.checked ? "connect" : "disconnect"}`
         );
-        this.checkStatus();
 
         if (!this.settings.get_boolean("status-check"))
-          this._manualStatusCheck = setTimeout(
-            () => this.checkStatus(),
-            this.settings.get_uint("status-check-freq") + 1000
-          );
+          this.probeManualConnectionStatus();
       });
 
       this.quickSettingsItems.push(this._toggle);
@@ -67,10 +64,13 @@ var WARPIndicator = GObject.registerClass(
       }
     }
 
+    async probeManualConnectionStatus() {
+      const status = await this.checkStatus();
+      if (status == "Connecting") this.probeManualConnectionStatus();
+    }
+
     destroy() {
       this.settings = null;
-      if (this._manualStatusCheck) clearTimeout(this._manualStatusCheck);
-      this._manualStatusCheck = null;
       this._indicator.destroy();
       for (const item of this.quickSettingsItems) item.destroy();
       super.destroy();
@@ -81,21 +81,28 @@ var WARPIndicator = GObject.registerClass(
       this._toggle.set({ checked: isActive, subtitle: optionalStatus });
     }
 
-    checkStatus() {
+    async checkStatus() {
       try {
-        let proc = Gio.Subprocess.new(
+        const proc = Gio.Subprocess.new(
           ["warp-cli", "status"],
           Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
         );
 
-        let [ok, stdout] = proc.communicate_utf8(null, null);
-        if (ok) {
-          const status = statusPattern.exec(stdout)?.[1];
-          this.updateStatus(status == "Connected", status);
-        }
+        const stdout = await new Promise((resolve, reject) => {
+          proc.communicate_utf8_async(null, null, (proc, res) => {
+            let [, stdout, stderr] = proc.communicate_utf8_finish(res);
+            if (proc.get_successful()) resolve(stdout);
+            reject(stderr);
+          });
+        });
+
+        const status = statusPattern.exec(stdout)?.[1];
+        this.updateStatus(status == "Connected", status);
+        return status;
       } catch (err) {
         this.updateStatus(false, "Error");
         logError(err);
+        return "Error";
       }
     }
   }

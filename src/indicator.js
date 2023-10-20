@@ -6,6 +6,14 @@ import { spawnCommandLine } from "resource:///org/gnome/shell/misc/util.js";
 const statusPattern =
   /(Connected|Connecting|Disconnected|Registration Missing)/;
 
+const WARPStatus = Object.freeze({
+  Connected: "Connected",
+  Connecting: "Connecting",
+  Disconnected: "Disconnected",
+  "Registration Missing": "Registration Missing",
+  Error: "Error",
+});
+
 const WARPToggle = GObject.registerClass(
   class WARPToggle extends QuickSettings.QuickToggle {
     _init(extensionObject) {
@@ -32,19 +40,20 @@ export var WARPIndicator = GObject.registerClass(
 
       //Create a Toggle for QuickSettings
       this._toggle = new WARPToggle(extensionObject);
-      this._toggle.connect("clicked", () => {
-        this.checkStatus();
+      this._toggle.connect("clicked", async () => {
+        if ((await this.checkStatus()) == WARPStatus.Connecting) return;
         spawnCommandLine(
           `warp-cli ${!this._toggle.checked ? "connect" : "disconnect"}`
         );
-        this.checkStatus();
 
-        if (!this._settings.get_boolean("status-check"))
-          this._manualStatusCheck = setTimeout(
-            () => this.checkStatus(),
-            this._settings.get_uint("status-check-freq") + 1000
-          );
+        if (!this.settings.get_boolean("status-check"))
+          this.probeManualConnectionStatus();
       });
+    }
+
+    async probeManualConnectionStatus() {
+      const status = await this.checkStatus();
+      if (status == WARPStatus.Connecting) this.probeManualConnectionStatus();
     }
 
     destroy() {
@@ -60,21 +69,28 @@ export var WARPIndicator = GObject.registerClass(
       this._toggle.set({ checked: isActive, subtitle: optionalStatus });
     }
 
-    checkStatus() {
+    async checkStatus() {
       try {
-        let proc = Gio.Subprocess.new(
+        const proc = Gio.Subprocess.new(
           ["warp-cli", "status"],
           Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
         );
 
-        let [ok, stdout] = proc.communicate_utf8(null, null);
-        if (ok) {
-          const status = statusPattern.exec(stdout)?.[1];
-          this.updateStatus(status == "Connected", status);
-        }
+        const stdout = await new Promise((resolve, reject) => {
+          proc.communicate_utf8_async(null, null, (proc, res) => {
+            let [, stdout, stderr] = proc.communicate_utf8_finish(res);
+            if (proc.get_successful()) resolve(stdout);
+            reject(stderr);
+          });
+        });
+
+        const status = statusPattern.exec(stdout)?.[1];
+        this.updateStatus(status == WARPStatus.Connected, status);
+        return WARPStatus[status];
       } catch (err) {
-        this.updateStatus(false, "Error");
+        this.updateStatus(false, WARPStatus.Error);
         logError(err);
+        return WARPStatus.Error;
       }
     }
   }

@@ -12,13 +12,13 @@ class Extension {
     this._indicator = new WARPIndicator();
     this.settings = ExtensionUtils.getSettings();
 
-    if (this._settings.get_boolean("status-check")) {
+    if (this.settings.get_boolean("status-check")) {
       this.startStatusCheckLoop();
     } else {
       this._indicator.checkStatus();
     }
 
-    this._settings.connect("changed", (settings) => {
+    this.settings.connect("changed", (settings) => {
       if (settings.get_boolean("status-check")) {
         this.startStatusCheckLoop();
       } else {
@@ -43,11 +43,11 @@ class Extension {
 
   startStatusCheckLoop() {
     if (this._timeout) clearInterval(this._timeout);
-    if (this._settings.get_uint("status-check-freq") <= 0) return;
+    if (this.settings.get_uint("status-check-freq") <= 0) return;
 
     this._timeout = setInterval(
       () => this._indicator.checkStatus(),
-      this._settings.get_uint("status-check-freq") * 1000
+      this.settings.get_uint("status-check-freq") * 1000
     );
   }
 }

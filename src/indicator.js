@@ -11,6 +11,14 @@ const Me = ExtensionUtils.getCurrentExtension();
 const statusPattern =
   /(Connected|Connecting|Disconnected|Registration Missing)/;
 
+const WARPStatus = Object.freeze({
+  Connected: "Connected",
+  Connecting: "Connecting",
+  Disconnected: "Disconnected",
+  "Registration Missing": "Registration Missing",
+  Error: "Error",
+});
+
 var WARPToggle = GObject.registerClass(
   class WARPToggle extends QuickToggle {
     _init() {
@@ -40,7 +48,7 @@ var WARPIndicator = GObject.registerClass(
 
       this._toggle = new WARPToggle();
       this._toggle.connect("clicked", async () => {
-        if ((await this.checkStatus()) == "Connecting") return;
+        if ((await this.checkStatus()) == WARPStatus.Connecting) return;
 
         spawnCommandLine(
           `warp-cli ${!this._toggle.checked ? "connect" : "disconnect"}`
@@ -66,7 +74,7 @@ var WARPIndicator = GObject.registerClass(
 
     async probeManualConnectionStatus() {
       const status = await this.checkStatus();
-      if (status == "Connecting") this.probeManualConnectionStatus();
+      if (status == WARPStatus.Connecting) this.probeManualConnectionStatus();
     }
 
     destroy() {
@@ -81,6 +89,7 @@ var WARPIndicator = GObject.registerClass(
       this._toggle.set({ checked: isActive, subtitle: optionalStatus });
     }
 
+    //Returns WARPStatus
     async checkStatus() {
       try {
         const proc = Gio.Subprocess.new(
@@ -97,12 +106,12 @@ var WARPIndicator = GObject.registerClass(
         });
 
         const status = statusPattern.exec(stdout)?.[1];
-        this.updateStatus(status == "Connected", status);
-        return status;
+        this.updateStatus(status == WARPStatus.Connected, status);
+        return WARPStatus[status];
       } catch (err) {
-        this.updateStatus(false, "Error");
+        this.updateStatus(false, WARPStatus.Error);
         logError(err);
-        return "Error";
+        return WARPStatus.Error;
       }
     }
   }

@@ -39,7 +39,7 @@ var WARPIndicator = GObject.registerClass(
   class WARPIndicator extends SystemIndicator {
     _init() {
       super._init();
-      this.settings = ExtensionUtils.getSettings();
+      this._settings = ExtensionUtils.getSettings();
       this._indicator = this._addIndicator();
       this._indicator.visible = false;
       this._indicator.gicon = Gio.icon_new_for_string(
@@ -48,13 +48,17 @@ var WARPIndicator = GObject.registerClass(
 
       this._toggle = new WARPToggle();
       this._toggle.connect("clicked", async () => {
-        if ((await this.checkStatus()) == WARPStatus.Connecting) return;
+        if ((await this.checkStatus()) == WARPStatus.Connecting) {
+          spawnCommandLine(`warp-cli disconnect`);
+          await this.checkStatus();
+          return;
+        }
 
         spawnCommandLine(
           `warp-cli ${!this._toggle.checked ? "connect" : "disconnect"}`
         );
 
-        if (!this.settings.get_boolean("status-check"))
+        if (!this._settings.get_boolean("status-check"))
           this.probeManualConnectionStatus();
       });
 
@@ -78,7 +82,7 @@ var WARPIndicator = GObject.registerClass(
     }
 
     destroy() {
-      this.settings = null;
+      this._settings = null;
       this._indicator.destroy();
       for (const item of this.quickSettingsItems) item.destroy();
       super.destroy();

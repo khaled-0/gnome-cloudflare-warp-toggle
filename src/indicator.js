@@ -41,19 +41,24 @@ export var WARPIndicator = GObject.registerClass(
       //Create a Toggle for QuickSettings
       this._toggle = new WARPToggle(extensionObject);
       this._toggle.connect("clicked", async () => {
-        if ((await this.checkStatus()) == WARPStatus.Connecting) return;
+        if ((await this.checkStatus()) == WARPStatus.Connecting) {
+          spawnCommandLine(`warp-cli disconnect`);
+          await this.checkStatus();
+          return;
+        }
+
         spawnCommandLine(
           `warp-cli ${!this._toggle.checked ? "connect" : "disconnect"}`
         );
 
-        if (!this.settings.get_boolean("status-check"))
+        if (!this._settings.get_boolean("status-check"))
           this.probeManualConnectionStatus();
       });
     }
 
     async probeManualConnectionStatus() {
-      const status = await this.checkStatus();
-      if (status == WARPStatus.Connecting) this.probeManualConnectionStatus();
+      if ((await this.checkStatus()) == WARPStatus.Connecting)
+        this.probeManualConnectionStatus();
     }
 
     destroy() {

@@ -15,7 +15,7 @@ Toggle cloudflare warp in quick settings. This extension depends on warp-cli par
 
 ## Screenshots
 
-<img src="https://extensions.gnome.org/extension-data/screenshots/screenshot_5982_NPbGU5D.png" width="380px" /> <img src="https://github.com/khaled-0/gnome-cloudflare-warp-toggle/assets/74397286/d3123a69-d574-4ec0-bc5b-044c53aebfc4" width="480px" />
+<img src="https://extensions.gnome.org/extension-data/screenshots/screenshot_5982_NPbGU5D.png" width="240px" /> <img src="https://github.com/khaled-0/gnome-cloudflare-warp-toggle/assets/74397286/d3123a69-d574-4ec0-bc5b-044c53aebfc4" width="280px" />
 
 ### Legacy Note
 

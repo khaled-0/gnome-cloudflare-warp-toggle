@@ -1,10 +1,9 @@
 {
   "name": "cloudflare-warp-toggle",
-  "version": "1.0.0",
   "main": "index.js",
   "license": "MIT",
   "scripts": {
-    "build": "zip-build src",
+    "build": "zip-build --template %NAME%.%EXT% --override src ./",
     "lint": "eslint ."
   },
   "devDependencies": {

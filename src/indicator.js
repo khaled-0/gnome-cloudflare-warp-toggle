@@ -48,9 +48,9 @@ var WARPIndicator = GObject.registerClass(
 
       this._toggle = new WARPToggle();
       this._toggle.connect("clicked", async () => {
-        if ((await this.checkStatus()) == WARPStatus.Connecting) {
+        if ((await this.checkStatusAndUpdate()) == WARPStatus.Connecting) {
           spawnCommandLine(`warp-cli disconnect`);
-          await this.checkStatus();
+          await this.checkStatusAndUpdate();
           return;
         }
 
@@ -59,7 +59,7 @@ var WARPIndicator = GObject.registerClass(
         );
 
         if (!this._settings.get_boolean("status-check"))
-          this.probeManualConnectionStatus();
+          this.updateStatusWhileConnecting();
       });
 
       this.quickSettingsItems.push(this._toggle);
@@ -76,25 +76,35 @@ var WARPIndicator = GObject.registerClass(
       }
     }
 
-    async probeManualConnectionStatus() {
-      const status = await this.checkStatus();
-      if (status == WARPStatus.Connecting) this.probeManualConnectionStatus();
+    async updateStatusWhileConnecting() {
+      if ((await this.checkStatusAndUpdate()) != WARPStatus.Connecting) {
+        clearTimeout(this._timeout);
+        this._timeout = null;
+        return;
+      }
+
+      //Checking every second while connecting. Prevents excessive CPU usage
+      this._timeout = setTimeout(
+        () => this.updateStatusWhileConnecting(),
+        1000
+      );
     }
 
     destroy() {
       this._settings = null;
+      if (this._timeout) clearTimeout(this._timeout);
+      this._timeout = null;
       this._indicator.destroy();
       for (const item of this.quickSettingsItems) item.destroy();
       super.destroy();
     }
 
-    updateStatus(isActive, optionalStatus) {
+    setStatus(isActive, optionalStatus) {
       this._indicator.visible = isActive;
       this._toggle.set({ checked: isActive, subtitle: optionalStatus });
     }
 
-    //Returns WARPStatus
-    async checkStatus() {
+    async checkStatusAndUpdate() {
       try {
         const proc = Gio.Subprocess.new(
           ["warp-cli", "status"],
@@ -110,10 +120,10 @@ var WARPIndicator = GObject.registerClass(
         });
 
         const status = statusPattern.exec(stdout)?.[1];
-        this.updateStatus(status == WARPStatus.Connected, status);
+        this.setStatus(status == WARPStatus.Connected, status);
         return WARPStatus[status];
       } catch (err) {
-        this.updateStatus(false, WARPStatus.Error);
+        this.setStatus(false, WARPStatus.Error);
         logError(err);
         return WARPStatus.Error;
       }

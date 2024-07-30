@@ -15,14 +15,14 @@ class Extension {
     if (this.settings.get_boolean("status-check")) {
       this.startStatusCheckLoop();
     } else {
-      this._indicator.checkStatus();
+      this._indicator.checkStatusAndUpdate();
     }
 
     this.settings.connect("changed", (settings) => {
       if (settings.get_boolean("status-check")) {
         this.startStatusCheckLoop();
       } else {
-        if (this._timeout) clearInterval(this._timeout);
+        if (this._interval) clearInterval(this._interval);
       }
     });
   }
@@ -33,20 +33,20 @@ class Extension {
       this._indicator = null;
     }
 
-    if (this._timeout) {
-      clearInterval(this._timeout);
-      this._timeout = null;
+    if (this._interval) {
+      clearInterval(this._interval);
+      this._interval = null;
     }
 
     this.settings = null;
   }
 
   startStatusCheckLoop() {
-    if (this._timeout) clearInterval(this._timeout);
+    if (this._interval) clearInterval(this._interval);
     if (this.settings.get_uint("status-check-freq") <= 0) return;
 
-    this._timeout = setInterval(
-      () => this._indicator.checkStatus(),
+    this._interval = setInterval(
+      () => this._indicator.checkStatusAndUpdate(),
       this.settings.get_uint("status-check-freq") * 1000
     );
   }

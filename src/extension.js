@@ -1,6 +1,6 @@
-import { WARPIndicator } from "./indicator.js";
 import { Extension } from "resource:///org/gnome/shell/extensions/extension.js";
 import * as Main from "resource:///org/gnome/shell/ui/main.js";
+import { WARPIndicator } from "./indicator.js";
 
 export default class WARPToggleExtension extends Extension {
   enable() {
@@ -13,14 +13,14 @@ export default class WARPToggleExtension extends Extension {
     if (this._settings.get_boolean("status-check")) {
       this.startStatusCheckLoop();
     } else {
-      this._indicator.checkStatus();
+      this._indicator.checkStatusAndUpdate();
     }
 
     this._settings.connect("changed", (settings) => {
       if (settings.get_boolean("status-check")) {
         this.startStatusCheckLoop();
       } else {
-        if (this._timeout) clearInterval(this._timeout);
+        if (this._interval) clearInterval(this._interval);
       }
     });
   }
@@ -30,20 +30,20 @@ export default class WARPToggleExtension extends Extension {
     this._indicator.destroy();
     this._indicator = null;
 
-    if (this._timeout) {
-      clearInterval(this._timeout);
-      this._timeout = null;
+    if (this._interval) {
+      clearInterval(this._interval);
+      this._interval = null;
     }
 
     this._settings = null;
   }
 
   startStatusCheckLoop() {
-    if (this._timeout) clearInterval(this._timeout);
+    if (this._interval) clearInterval(this._interval);
     if (this._settings.get_uint("status-check-freq") <= 0) return;
 
-    this._timeout = setInterval(
-      () => this._indicator.checkStatus(),
+    this._interval = setInterval(
+      () => this._indicator.checkStatusAndUpdate(),
       this._settings.get_uint("status-check-freq") * 1000
     );
   }

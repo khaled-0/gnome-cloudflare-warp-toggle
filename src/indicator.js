@@ -4,13 +4,14 @@ import { spawnCommandLine } from "resource:///org/gnome/shell/misc/util.js";
 import * as QuickSettings from "resource:///org/gnome/shell/ui/quickSettings.js";
 
 const statusPattern =
-  /(Connected|Connecting|Disconnected|Registration Missing)/;
+  /(Connected|Connecting|Disconnected|Registration Missing|No Network)/;
 
 const WARPStatus = Object.freeze({
   Connected: "Connected",
   Connecting: "Connecting",
   Disconnected: "Disconnected",
   "Registration Missing": "Registration Missing",
+  "No Network": "No Network",
   Error: "Error",
 });
 

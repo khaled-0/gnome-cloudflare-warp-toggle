@@ -22,9 +22,7 @@ const WARPStatus = Object.freeze({
 var WARPToggle = GObject.registerClass(
   class WARPToggle extends QuickToggle {
     _init() {
-      super._init({
-        title: "WARP",
-      });
+      super._init({});
 
       this.label = "WARP";
       this.gicon = Gio.icon_new_for_string(

@@ -6,17 +6,22 @@ import * as QuickSettings from "resource:///org/gnome/shell/ui/quickSettings.js"
 const statusPattern =
   /(Connected|Connecting|Disconnected|Registration Missing|No Network)/;
 
-const WARPStatus = Object.freeze({
+const WARPStatus = {
   Connected: "Connected",
   Connecting: "Connecting",
   Disconnected: "Disconnected",
-  "Registration Missing": "Registration Missing",
-  "No Network": "No Network",
+  RegistrationMissing: "Registration Missing",
+  NoNetwork: "No Network",
   Error: "Error",
-});
+};
 
 const POLL_INTERVAL = 1000;
 const MAX_ATTEMPTS = 30;
+const TERMINAL_STATUSES = [
+  WARPStatus.Error,
+  WARPStatus.RegistrationMissing,
+  WARPStatus.NoNetwork,
+];
 
 const WARPToggle = GObject.registerClass(
   class WARPToggle extends QuickSettings.QuickToggle {
@@ -35,33 +40,37 @@ export var WARPIndicator = GObject.registerClass(
   class WARPIndicator extends QuickSettings.SystemIndicator {
     _init(extensionObject) {
       super._init();
+      const icon = Gio.icon_new_for_string(
+        extensionObject.path + "/icons/cloudflare-symbolic.svg"
+      );
       this._indicator = this._addIndicator();
       this._settings = extensionObject.getSettings();
       this._indicator.visible = false;
-      this._indicator.gicon = Gio.icon_new_for_string(
-        extensionObject.path + "/icons/cloudflare-symbolic.svg"
-      );
+      this._indicator.gicon = icon;
 
       this._timeout = null;
       this._generation = 0;
       this._pendingAction = null;
-      this._isConnected = false;
       this._destroyed = false;
 
       this._toggle = new WARPToggle(extensionObject);
 
       this._toggle.connect("clicked", () => {
-        if (this._pendingAction === "disconnect") {
-          this.setStatus(false, "Disconnecting");
-          return;
-        }
+        if (this._pendingAction === "disconnect") return;
 
-        if (this._pendingAction === "connect" || this._isConnected) {
+        if (this._pendingAction === "connect" || this._toggle.checked) {
           this._runAction("disconnect");
         } else {
           this._runAction("connect");
         }
       });
+    }
+
+    _isActionFinished(action, status) {
+      const expectedStatus =
+        action === "connect" ? WARPStatus.Connected : WARPStatus.Disconnected;
+
+      return status === expectedStatus || TERMINAL_STATUSES.includes(status);
     }
 
     _stopPolling() {
@@ -112,14 +121,7 @@ export var WARPIndicator = GObject.registerClass(
 
       const action = this._pendingAction;
 
-      const finished =
-        (action === "connect" && status === WARPStatus.Connected) ||
-        (action === "disconnect" && status === WARPStatus.Disconnected) ||
-        status === WARPStatus.Error ||
-        status === WARPStatus["Registration Missing"] ||
-        status === WARPStatus["No Network"];
-
-      if (finished) {
+      if (this._isActionFinished(action, status)) {
         this._finishStatus(status);
         return;
       }
@@ -159,8 +161,6 @@ export var WARPIndicator = GObject.registerClass(
     }
 
     setStatus(isActive, optionalStatus) {
-      this._isConnected = isActive;
-
       this._indicator.visible = isActive;
 
       this._toggle.set({
@@ -192,8 +192,6 @@ export var WARPIndicator = GObject.registerClass(
 
         const status = statusPattern.exec(stdout)?.[1] ?? WARPStatus.Error;
 
-        console.log("WARP status:", status);
-
         return status;
       } catch (err) {
         logError(err);
@@ -207,28 +205,19 @@ export var WARPIndicator = GObject.registerClass(
 
       const status = await this.getStatus();
 
-      if (this._destroyed || generation !== this._generation) return status;
+      if (this._destroyed || generation !== this._generation) return;
 
       // Don't overwrite an optimistic transitional state
       // with an intermediate CLI result.
       if (this._pendingAction) {
         const action = this._pendingAction;
 
-        const finished =
-          (action === "connect" && status === WARPStatus.Connected) ||
-          (action === "disconnect" && status === WARPStatus.Disconnected) ||
-          status === WARPStatus.Error ||
-          status === WARPStatus["Registration Missing"] ||
-          status === WARPStatus["No Network"];
+        if (this._isActionFinished(action, status)) this._finishStatus(status);
 
-        if (finished) this._finishStatus(status);
-
-        return status;
+        return;
       }
 
       this.setStatus(status === WARPStatus.Connected, status);
-
-      return status;
     }
 
     destroy() {

@@ -1,7 +1,10 @@
 import Gio from "gi://Gio";
 import GObject from "gi://GObject";
-import { spawnCommandLine } from "resource:///org/gnome/shell/misc/util.js";
 import * as QuickSettings from "resource:///org/gnome/shell/ui/quickSettings.js";
+import {
+  Ornament,
+  PopupMenuItem,
+} from "resource:///org/gnome/shell/ui/popupMenu.js";
 
 const statusPattern =
   /(Connected|Connecting|Disconnected|Registration Missing|No Network)/;
@@ -14,24 +17,121 @@ const WARPStatus = {
   NoNetwork: "No Network",
   Error: "Error",
 };
-
 const POLL_INTERVAL = 1000;
-const MAX_ATTEMPTS = 30;
+const ACTION_TIMEOUT = 30_000;
+const COMMAND_TIMEOUT = 10_000;
+const WARP_MODES = [
+  "warp",
+  "doh",
+  "warp+doh",
+  "dot",
+  "warp+dot",
+  "proxy",
+  "tunnel_only",
+];
 const TERMINAL_STATUSES = [
-  WARPStatus.Error,
   WARPStatus.RegistrationMissing,
   WARPStatus.NoNetwork,
 ];
 
+let warpCliQueue = Promise.resolve();
+
+function runWarpCli(args, isValid, cancellable) {
+  const command = warpCliQueue.then(() => {
+    if (!isValid() || cancellable.is_cancelled()) return null;
+
+    return new Promise((resolve, reject) => {
+      const proc = Gio.Subprocess.new(
+        ["warp-cli", ...args],
+        Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
+      );
+      const operation = new Gio.Cancellable();
+      let timedOut = false;
+      const cancelId = cancellable.connect(() => {
+        proc.force_exit();
+        operation.cancel();
+      });
+      const timeout = setTimeout(() => {
+        timedOut = true;
+        proc.force_exit();
+        operation.cancel();
+      }, COMMAND_TIMEOUT);
+
+      proc.communicate_utf8_async(null, operation, (proc, res) => {
+        clearTimeout(timeout);
+        cancellable.disconnect(cancelId);
+        try {
+          const [, stdout, stderr] = proc.communicate_utf8_finish(res);
+          if (timedOut)
+            reject(new Error(`warp-cli ${args.join(" ")} timed out`));
+          else if (proc.get_successful()) resolve((stdout ?? "").trim());
+          else
+            reject(
+              new Error(stderr?.trim() || `warp-cli ${args.join(" ")} failed`)
+            );
+        } catch (err) {
+          reject(
+            timedOut ? new Error(`warp-cli ${args.join(" ")} timed out`) : err
+          );
+        }
+      });
+    });
+  });
+  warpCliQueue = command.catch(() => {});
+  return command;
+}
+
 const WARPToggle = GObject.registerClass(
-  class WARPToggle extends QuickSettings.QuickToggle {
-    _init(extensionObject) {
+  class WARPToggle extends QuickSettings.QuickMenuToggle {
+    _init(extensionObject, cancellable) {
       super._init({
         title: "WARP",
         gicon: Gio.icon_new_for_string(
           extensionObject.path + "/icons/cloudflare-symbolic.svg"
         ),
+        toggleMode: true,
       });
+      this._cancellable = cancellable;
+      this._modeItems = new Map();
+
+      for (const mode of WARP_MODES) {
+        const item = new PopupMenuItem(mode);
+        item.connect("activate", async () => {
+          try {
+            await runWarpCli(
+              ["mode", mode],
+              () => !this._cancellable.is_cancelled(),
+              this._cancellable
+            );
+            await this._updateCurrentMode();
+          } catch (err) {
+            if (!this._cancellable.is_cancelled()) logError(err);
+          }
+        });
+        this.menu.addMenuItem(item);
+        this._modeItems.set(mode, item);
+      }
+
+      this.menu.connect("open-state-changed", (_menu, open) => {
+        if (open) this._updateCurrentMode();
+      });
+    }
+
+    async _updateCurrentMode() {
+      try {
+        const output = await runWarpCli(
+          ["--json", "settings"],
+          () => !this._cancellable.is_cancelled(),
+          this._cancellable
+        );
+        if (output === null) return;
+
+        const mode = JSON.parse(output).settings.operation_mode;
+        for (const [name, item] of this._modeItems)
+          item.setOrnament(name === mode ? Ornament.CHECK : Ornament.NONE);
+      } catch (err) {
+        if (!this._cancellable.is_cancelled()) logError(err);
+      }
     }
   }
 );
@@ -40,193 +140,139 @@ export var WARPIndicator = GObject.registerClass(
   class WARPIndicator extends QuickSettings.SystemIndicator {
     _init(extensionObject) {
       super._init();
-      const icon = Gio.icon_new_for_string(
+      this._cancellable = new Gio.Cancellable();
+      this._indicator = this._addIndicator();
+      this._indicator.gicon = Gio.icon_new_for_string(
         extensionObject.path + "/icons/cloudflare-symbolic.svg"
       );
-      this._indicator = this._addIndicator();
-      this._settings = extensionObject.getSettings();
-      this._indicator.visible = false;
-      this._indicator.gicon = icon;
-
-      this._timeout = null;
       this._generation = 0;
       this._pendingAction = null;
-      this._destroyed = false;
-
-      this._toggle = new WARPToggle(extensionObject);
-
-      this._toggle.connect("clicked", () => {
-        if (this._pendingAction === "disconnect") return;
-
-        if (this._pendingAction === "connect" || this._toggle.checked) {
-          this._runAction("disconnect");
-        } else {
-          this._runAction("connect");
-        }
-      });
+      this._deadline = null;
+      this._timeout = null;
+      this._toggle = new WARPToggle(extensionObject, this._cancellable);
+      this._toggle.connect("clicked", () =>
+        this._runAction(this._toggle.checked ? "connect" : "disconnect")
+      );
     }
 
-    _isActionFinished(action, status) {
-      const expectedStatus =
-        action === "connect" ? WARPStatus.Connected : WARPStatus.Disconnected;
-
-      return status === expectedStatus || TERMINAL_STATUSES.includes(status);
-    }
-
-    _stopPolling() {
-      this._generation++;
-
-      if (this._timeout !== null) {
-        clearTimeout(this._timeout);
-        this._timeout = null;
-      }
-    }
-
-    _runAction(action) {
-      this._stopPolling();
+    async _runAction(action) {
+      const generation = ++this._generation;
+      clearTimeout(this._timeout);
+      this._timeout = null;
       this._pendingAction = action;
-
-      // Update the UI immediately, without waiting for warp-cli.
-      this.setStatus(
-        false,
-        action === "connect" ? WARPStatus.Connecting : "Disconnecting"
+      this._deadline = Date.now() + ACTION_TIMEOUT;
+      this._setStatus(
+        this._indicator.visible,
+        action === "connect" ? WARPStatus.Connecting : "Disconnecting",
+        action === "connect"
       );
 
       try {
-        spawnCommandLine(`warp-cli ${action}`);
+        await runWarpCli(
+          [action],
+          () => generation === this._generation && Date.now() < this._deadline,
+          this._cancellable
+        );
       } catch (err) {
-        this._pendingAction = null;
-        this.setStatus(false, WARPStatus.Error);
+        if (this._cancellable.is_cancelled() || generation !== this._generation)
+          return;
+
         logError(err);
+        this._pendingAction = null;
+        this._deadline = null;
+        await this._updateStatus(generation);
         return;
       }
 
-      const generation = this._generation;
-
-      if (!this._settings.get_boolean("status-check")) {
-        // Give warp-cli a moment to initiate the operation.
-        this._timeout = setTimeout(() => this._pollStatus(generation, 0), 1000);
-      }
+      if (this._cancellable.is_cancelled() || generation !== this._generation)
+        return;
+      this._scheduleStatusUpdate(generation);
     }
 
-    async _pollStatus(generation, attempt) {
-      if (this._destroyed || generation !== this._generation) return;
-
-      this._timeout = null;
-
-      const status = await this.getStatus();
-
-      // An old subprocess must not update a newer operation.
-      if (this._destroyed || generation !== this._generation) return;
-
-      const action = this._pendingAction;
-
-      if (this._isActionFinished(action, status)) {
-        this._finishStatus(status);
-        return;
-      }
-
-      if (attempt >= MAX_ATTEMPTS) {
-        this._pendingAction = null;
-        this._stopPolling();
-
-        this.setStatus(
-          status === WARPStatus.Connected,
-          action === "connect"
-            ? "Connection timed out"
-            : "Disconnection timed out"
-        );
-
-        return;
-      }
-
-      // Keep the optimistic state.
-      // Disconnected during connection is not necessarily a failure.
-      this.setStatus(
-        false,
-        action === "connect" ? WARPStatus.Connecting : "Disconnecting"
-      );
-
+    _scheduleStatusUpdate(generation) {
+      clearTimeout(this._timeout);
       this._timeout = setTimeout(
-        () => this._pollStatus(generation, attempt + 1),
+        () => this._updateStatus(generation),
         POLL_INTERVAL
       );
     }
 
-    _finishStatus(status) {
-      this._pendingAction = null;
-      this._stopPolling();
+    async _updateStatus(generation = this._generation) {
+      const status = await this._getStatus();
+      if (this._cancellable.is_cancelled() || generation !== this._generation)
+        return;
 
-      this.setStatus(status === WARPStatus.Connected, status);
+      const action = this._pendingAction;
+      if (status === WARPStatus.Error) {
+        this._toggle.subtitle = "Unable to determine status";
+        if (action && Date.now() < this._deadline) {
+          this._scheduleStatusUpdate(generation);
+        } else if (action) {
+          this._pendingAction = null;
+          this._deadline = null;
+          this._toggle.checked = this._indicator.visible;
+        }
+        return;
+      }
+
+      if (action) {
+        const expected =
+          action === "connect" ? WARPStatus.Connected : WARPStatus.Disconnected;
+        if (status === expected || TERMINAL_STATUSES.includes(status)) {
+          this._pendingAction = null;
+          this._deadline = null;
+        } else if (Date.now() >= this._deadline) {
+          this._pendingAction = null;
+          this._deadline = null;
+          this._setStatus(
+            status === WARPStatus.Connected,
+            action === "connect"
+              ? "Connection timed out"
+              : "Disconnection timed out"
+          );
+          return;
+        } else {
+          this._setStatus(
+            this._indicator.visible,
+            action === "connect" ? WARPStatus.Connecting : "Disconnecting",
+            action === "connect"
+          );
+          this._scheduleStatusUpdate(generation);
+          return;
+        }
+      }
+
+      this._setStatus(status === WARPStatus.Connected, status);
     }
 
-    setStatus(isActive, optionalStatus) {
-      this._indicator.visible = isActive;
-
-      this._toggle.set({
-        checked: isActive,
-        subtitle: optionalStatus,
-      });
-    }
-
-    // Retrieves the actual status without modifying the UI.
-    async getStatus() {
+    async _getStatus() {
       try {
-        const proc = Gio.Subprocess.new(
-          ["warp-cli", "status"],
-          Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
+        const output = await runWarpCli(
+          ["status"],
+          () => !this._cancellable.is_cancelled(),
+          this._cancellable
         );
-
-        const stdout = await new Promise((resolve, reject) => {
-          proc.communicate_utf8_async(null, null, (proc, res) => {
-            try {
-              const [, stdout, stderr] = proc.communicate_utf8_finish(res);
-
-              if (proc.get_successful()) resolve(stdout);
-              else reject(new Error(stderr || "warp-cli status failed"));
-            } catch (err) {
-              reject(err);
-            }
-          });
-        });
-
-        const status = statusPattern.exec(stdout)?.[1] ?? WARPStatus.Error;
-
-        return status;
-      } catch (err) {
-        logError(err);
+        return output === null
+          ? WARPStatus.Error
+          : statusPattern.exec(output)?.[1] ?? WARPStatus.Error;
+      } catch {
         return WARPStatus.Error;
       }
     }
 
-    // Safe to call from an external periodic status checker.
+    _setStatus(isActive, subtitle, checked = isActive) {
+      this._indicator.visible = isActive;
+      this._toggle.set({ checked, subtitle });
+    }
+
     async checkStatusAndUpdate() {
-      const generation = this._generation;
-
-      const status = await this.getStatus();
-
-      if (this._destroyed || generation !== this._generation) return;
-
-      // Don't overwrite an optimistic transitional state
-      // with an intermediate CLI result.
-      if (this._pendingAction) {
-        const action = this._pendingAction;
-
-        if (this._isActionFinished(action, status)) this._finishStatus(status);
-
-        return;
-      }
-
-      this.setStatus(status === WARPStatus.Connected, status);
+      await this._updateStatus();
     }
 
     destroy() {
-      this._destroyed = true;
-      this._stopPolling();
-
-      this._pendingAction = null;
-      this._settings = null;
-
+      this._generation++;
+      this._cancellable.cancel();
+      clearTimeout(this._timeout);
       super.destroy();
     }
   }

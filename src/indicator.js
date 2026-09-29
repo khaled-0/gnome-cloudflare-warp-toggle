@@ -43,7 +43,7 @@ function runWarpCli(args, isValid, cancellable) {
     return new Promise((resolve, reject) => {
       const proc = Gio.Subprocess.new(
         ["warp-cli", ...args],
-        Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
+        Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE,
       );
       const operation = new Gio.Cancellable();
       let timedOut = false;
@@ -67,11 +67,11 @@ function runWarpCli(args, isValid, cancellable) {
           else if (proc.get_successful()) resolve((stdout ?? "").trim());
           else
             reject(
-              new Error(stderr?.trim() || `warp-cli ${args.join(" ")} failed`)
+              new Error(stderr?.trim() || `warp-cli ${args.join(" ")} failed`),
             );
         } catch (err) {
           reject(
-            timedOut ? new Error(`warp-cli ${args.join(" ")} timed out`) : err
+            timedOut ? new Error(`warp-cli ${args.join(" ")} timed out`) : err,
           );
         }
       });
@@ -87,7 +87,7 @@ const WARPToggle = GObject.registerClass(
       super._init({
         title: "WARP",
         gicon: Gio.icon_new_for_string(
-          extensionObject.path + "/icons/cloudflare-symbolic.svg"
+          extensionObject.path + "/icons/cloudflare-symbolic.svg",
         ),
         toggleMode: true,
       });
@@ -101,7 +101,7 @@ const WARPToggle = GObject.registerClass(
             await runWarpCli(
               ["mode", mode],
               () => !this._cancellable.is_cancelled(),
-              this._cancellable
+              this._cancellable,
             );
             await this._updateCurrentMode();
           } catch (err) {
@@ -112,9 +112,17 @@ const WARPToggle = GObject.registerClass(
         this._modeItems.set(mode, item);
       }
 
-      this.menu.connect("open-state-changed", (_menu, open) => {
-        if (open) this._updateCurrentMode();
-      });
+      this._menuOpenStateId = this.menu.connect(
+        "open-state-changed",
+        (_menu, open) => {
+          if (open) this._updateCurrentMode();
+        },
+      );
+    }
+
+    destroy() {
+      this.menu.disconnect(this._menuOpenStateId);
+      super.destroy();
     }
 
     async _updateCurrentMode() {
@@ -122,7 +130,7 @@ const WARPToggle = GObject.registerClass(
         const output = await runWarpCli(
           ["--json", "settings"],
           () => !this._cancellable.is_cancelled(),
-          this._cancellable
+          this._cancellable,
         );
         if (output === null) return;
 
@@ -133,7 +141,7 @@ const WARPToggle = GObject.registerClass(
         if (!this._cancellable.is_cancelled()) logError(err);
       }
     }
-  }
+  },
 );
 
 export var WARPIndicator = GObject.registerClass(
@@ -143,7 +151,7 @@ export var WARPIndicator = GObject.registerClass(
       this._cancellable = new Gio.Cancellable();
       this._indicator = this._addIndicator();
       this._indicator.gicon = Gio.icon_new_for_string(
-        extensionObject.path + "/icons/cloudflare-symbolic.svg"
+        extensionObject.path + "/icons/cloudflare-symbolic.svg",
       );
       this._generation = 0;
       this._pendingAction = null;
@@ -151,7 +159,7 @@ export var WARPIndicator = GObject.registerClass(
       this._timeout = null;
       this._toggle = new WARPToggle(extensionObject, this._cancellable);
       this._toggle.connect("clicked", () =>
-        this._runAction(this._toggle.checked ? "connect" : "disconnect")
+        this._runAction(this._toggle.checked ? "connect" : "disconnect"),
       );
     }
 
@@ -164,14 +172,14 @@ export var WARPIndicator = GObject.registerClass(
       this._setStatus(
         this._indicator.visible,
         action === "connect" ? WARPStatus.Connecting : "Disconnecting",
-        action === "connect"
+        action === "connect",
       );
 
       try {
         await runWarpCli(
           [action],
           () => generation === this._generation && Date.now() < this._deadline,
-          this._cancellable
+          this._cancellable,
         );
       } catch (err) {
         if (this._cancellable.is_cancelled() || generation !== this._generation)
@@ -193,7 +201,7 @@ export var WARPIndicator = GObject.registerClass(
       clearTimeout(this._timeout);
       this._timeout = setTimeout(
         () => this._updateStatus(generation),
-        POLL_INTERVAL
+        POLL_INTERVAL,
       );
     }
 
@@ -228,14 +236,14 @@ export var WARPIndicator = GObject.registerClass(
             status === WARPStatus.Connected,
             action === "connect"
               ? "Connection timed out"
-              : "Disconnection timed out"
+              : "Disconnection timed out",
           );
           return;
         } else {
           this._setStatus(
             this._indicator.visible,
             action === "connect" ? WARPStatus.Connecting : "Disconnecting",
-            action === "connect"
+            action === "connect",
           );
           this._scheduleStatusUpdate(generation);
           return;
@@ -250,11 +258,11 @@ export var WARPIndicator = GObject.registerClass(
         const output = await runWarpCli(
           ["status"],
           () => !this._cancellable.is_cancelled(),
-          this._cancellable
+          this._cancellable,
         );
         return output === null
           ? WARPStatus.Error
-          : statusPattern.exec(output)?.[1] ?? WARPStatus.Error;
+          : (statusPattern.exec(output)?.[1] ?? WARPStatus.Error);
       } catch {
         return WARPStatus.Error;
       }
@@ -275,5 +283,5 @@ export var WARPIndicator = GObject.registerClass(
       clearTimeout(this._timeout);
       super.destroy();
     }
-  }
+  },
 );

@@ -26,7 +26,7 @@ export default class WARPToggleExtensionPreferences extends ExtensionPreferences
       "status-check",
       statusCheckSwitch,
       "active",
-      Gio.SettingsBindFlags.DEFAULT
+      Gio.SettingsBindFlags.DEFAULT,
     );
 
     statusCheckSwitchRow.add_suffix(statusCheckSwitch);
@@ -51,7 +51,7 @@ export default class WARPToggleExtensionPreferences extends ExtensionPreferences
       "status-check-freq",
       statusCheckFrequencyField,
       "value",
-      Gio.SettingsBindFlags.DEFAULT
+      Gio.SettingsBindFlags.DEFAULT,
     );
 
     statusCheckFreqRow.add_suffix(statusCheckFrequencyField);

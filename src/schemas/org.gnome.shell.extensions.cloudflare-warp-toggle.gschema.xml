@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist>
-  <schema id="org.gnome.shell.extensions.cloudflare-warp-toggle.gschema" path="/org/gnome/shell/extensions/cloudflare-warp-toggle/">
+  <schema id="org.gnome.shell.extensions.cloudflare-warp-toggle" path="/org/gnome/shell/extensions/cloudflare-warp-toggle/">
     <key name="status-check" type="b">
       <default>false</default>
       <summary>Check warp connection status in background</summary>

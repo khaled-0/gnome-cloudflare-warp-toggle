@@ -11,39 +11,53 @@ export default class WARPToggleExtension extends Extension {
     Main.panel.statusArea.quickSettings.addExternalIndicator(this._indicator);
 
     this._indicator.checkStatusAndUpdate();
+
     if (this._settings.get_boolean("status-check")) {
       this.startStatusCheckLoop();
     }
 
-    this._settings.connect("changed", (settings) => {
+    this._settingsChangedId = this._settings.connect("changed", (settings) => {
       if (settings.get_boolean("status-check")) {
         this.startStatusCheckLoop();
       } else {
-        if (this._interval) clearInterval(this._interval);
+        if (this._interval) {
+          clearInterval(this._interval);
+          this._interval = null;
+        }
       }
     });
   }
 
   disable() {
-    this._indicator.quickSettingsItems.forEach((item) => item.destroy());
-    this._indicator.destroy();
-    this._indicator = null;
+    if (this._settingsChangedId) {
+      this._settings.disconnect(this._settingsChangedId);
+      this._settingsChangedId = null;
+    }
 
     if (this._interval) {
       clearInterval(this._interval);
       this._interval = null;
     }
 
+    this._indicator.quickSettingsItems.forEach((item) => item.destroy());
+    this._indicator.destroy();
+    this._indicator = null;
+
     this._settings = null;
   }
 
   startStatusCheckLoop() {
-    if (this._interval) clearInterval(this._interval);
-    if (this._settings.get_uint("status-check-freq") <= 0) return;
+    if (this._interval) {
+      clearInterval(this._interval);
+      this._interval = null;
+    }
+
+    const frequency = this._settings.get_uint("status-check-freq");
+    if (frequency <= 0) return;
 
     this._interval = setInterval(
       () => this._indicator.checkStatusAndUpdate(),
-      this._settings.get_uint("status-check-freq") * 1000
+      frequency * 1000,
     );
   }
 }

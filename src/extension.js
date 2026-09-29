@@ -10,10 +10,9 @@ export default class WARPToggleExtension extends Extension {
     this._indicator.quickSettingsItems.push(this._indicator._toggle);
     Main.panel.statusArea.quickSettings.addExternalIndicator(this._indicator);
 
+    this._indicator.checkStatusAndUpdate();
     if (this._settings.get_boolean("status-check")) {
       this.startStatusCheckLoop();
-    } else {
-      this._indicator.checkStatusAndUpdate();
     }
 
     this._settings.connect("changed", (settings) => {

@@ -4,6 +4,8 @@ import * as QuickSettings from "resource:///org/gnome/shell/ui/quickSettings.js"
 import {
   Ornament,
   PopupMenuItem,
+  PopupSeparatorMenuItem,
+  PopupSubMenuMenuItem,
 } from "resource:///org/gnome/shell/ui/popupMenu.js";
 
 const statusPattern =
@@ -94,6 +96,7 @@ const WARPToggle = GObject.registerClass(
       this._cancellable = cancellable;
       this._modeItems = new Map();
 
+      const modeMenu = new PopupSubMenuMenuItem("Mode");
       for (const mode of WARP_MODES) {
         const item = new PopupMenuItem(mode);
         item.connect("activate", async () => {
@@ -108,14 +111,25 @@ const WARPToggle = GObject.registerClass(
             if (!this._cancellable.is_cancelled()) logError(err);
           }
         });
-        this.menu.addMenuItem(item);
+        modeMenu.menu.addMenuItem(item);
         this._modeItems.set(mode, item);
       }
+      this.menu.addMenuItem(modeMenu);
+
+      this._vnetSeparator = new PopupSeparatorMenuItem();
+      this.menu.addMenuItem(this._vnetSeparator);
+      this._vnetMenu = new PopupSubMenuMenuItem("Virtual network");
+      this._vnetMenu.visible = false;
+      this._vnetSeparator.visible = false;
+      this.menu.addMenuItem(this._vnetMenu);
 
       this._menuOpenStateId = this.menu.connect(
         "open-state-changed",
         (_menu, open) => {
-          if (open) this._updateCurrentMode();
+          if (open) {
+            this._updateCurrentMode();
+            this._updateVnets();
+          }
         },
       );
     }
@@ -139,6 +153,52 @@ const WARPToggle = GObject.registerClass(
           item.setOrnament(name === mode ? Ornament.CHECK : Ornament.NONE);
       } catch (err) {
         if (!this._cancellable.is_cancelled()) logError(err);
+      }
+    }
+
+    async _updateVnets() {
+      try {
+        const output = await runWarpCli(
+          ["--json", "vnet"],
+          () => !this._cancellable.is_cancelled(),
+          this._cancellable,
+        );
+        if (output === null) return;
+
+        const { active_vnet_id: activeVnetId, virtual_networks: vnets } =
+          JSON.parse(output);
+        if (!Array.isArray(vnets)) throw new Error("Invalid VNET response");
+
+        this._vnetMenu.menu.removeAll();
+        for (const vnet of vnets) {
+          if (!vnet.id || !vnet.name) continue;
+
+          const label = `${vnet.name}${vnet.default ? " (default)" : ""}`;
+          const item = new PopupMenuItem(label);
+          item.setOrnament(
+            vnet.id === activeVnetId ? Ornament.CHECK : Ornament.NONE,
+          );
+          item.connect("activate", async () => {
+            try {
+              await runWarpCli(
+                ["vnet", vnet.id],
+                () => !this._cancellable.is_cancelled(),
+                this._cancellable,
+              );
+              await this._updateVnets();
+            } catch (err) {
+              if (!this._cancellable.is_cancelled()) logError(err);
+            }
+          });
+          this._vnetMenu.menu.addMenuItem(item);
+        }
+
+        const visible = vnets.length > 0;
+        this._vnetMenu.visible = visible;
+        this._vnetSeparator.visible = visible;
+      } catch {
+        this._vnetMenu.visible = false;
+        this._vnetSeparator.visible = false;
       }
     }
   },

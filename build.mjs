@@ -11,7 +11,15 @@ archive.on("error", (err) => output.destroy(err));
 archive.on("warning", (err) => output.destroy(err));
 
 archive.pipe(output);
-archive.directory("src/", false);
+
+archive.directory("src/", false, (entry) => {
+  if (entry.name === "schemas/gschemas.compiled") {
+    return false;
+  }
+
+  return entry;
+});
+
 archive.file("LICENSE", { name: "LICENSE" });
 
 await archive.finalize();

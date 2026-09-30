@@ -8,15 +8,13 @@ import {
   PopupSubMenuMenuItem,
 } from "resource:///org/gnome/shell/ui/popupMenu.js";
 
-const statusPattern =
-  /(Connected|Connecting|Disconnected|Registration Missing|No Network)/;
-
 const WARPStatus = {
   Connected: "Connected",
   Connecting: "Connecting",
   Disconnected: "Disconnected",
   RegistrationMissing: "Registration Missing",
   NoNetwork: "No Network",
+  Unable: "Unable",
   Error: "Error",
 };
 const POLL_INTERVAL = 1000;
@@ -30,10 +28,6 @@ const WARP_MODES = [
   "warp+dot",
   "proxy",
   "tunnel_only",
-];
-const TERMINAL_STATUSES = [
-  WARPStatus.RegistrationMissing,
-  WARPStatus.NoNetwork,
 ];
 
 let warpCliQueue = Promise.resolve();
@@ -286,7 +280,7 @@ export var WARPIndicator = GObject.registerClass(
       if (action) {
         const expected =
           action === "connect" ? WARPStatus.Connected : WARPStatus.Disconnected;
-        if (status === expected || TERMINAL_STATUSES.includes(status)) {
+        if (status === expected || status === WARPStatus.Error) {
           this._pendingAction = null;
           this._deadline = null;
         } else if (Date.now() >= this._deadline) {
@@ -316,13 +310,20 @@ export var WARPIndicator = GObject.registerClass(
     async _getStatus() {
       try {
         const output = await runWarpCli(
-          ["status"],
+          ["--json", "status"],
           () => !this._cancellable.is_cancelled(),
           this._cancellable,
         );
-        return output === null
-          ? WARPStatus.Error
-          : (statusPattern.exec(output)?.[1] ?? WARPStatus.Error);
+        if (output === null) return WARPStatus.Error;
+
+        const { status, reason } = JSON.parse(output);
+        if (status !== WARPStatus.Unable) return status ?? WARPStatus.Error;
+
+        const reasonText = JSON.stringify(reason);
+        if (reasonText.includes("RegistrationMissing"))
+          return WARPStatus.RegistrationMissing;
+        if (reasonText.includes("NoNetwork")) return WARPStatus.NoNetwork;
+        return WARPStatus.Unable;
       } catch {
         return WARPStatus.Error;
       }
